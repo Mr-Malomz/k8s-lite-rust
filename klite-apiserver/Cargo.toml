@@ -1,0 +1,10 @@
+[package]
+name = "klite-apiserver"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+klite-core = { path = "../klite-core" }
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+uuid = { version = "1", features = ["v4"] }
