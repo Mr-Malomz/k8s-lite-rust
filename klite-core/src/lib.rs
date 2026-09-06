@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 /// What the user submits ("desired state")
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PodSpec {
     pub name: String,
     pub image: String,
@@ -13,21 +13,21 @@ pub struct PodSpec {
     pub resources: ResourceRequest,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RestartPolicy {
     Always,
     OnFailure,
     Never,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResourceRequest {
     pub cpu_millis: u32,
     pub memory_mb: u32,
 }
 
 /// What the system observes ("actual state")
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PodStatus {
     pub phase: PodPhase,
     pub node_name: Option<String>,    // set once scheduled
@@ -48,7 +48,7 @@ pub enum PodPhase {
 /// The full object as stored — spec (desired) + status (actual) is the
 /// exact pattern real k8s uses, and it's the whole trick: reconciliation
 /// is just "make status converge toward spec"
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Pod {
     pub uid: String,
     pub spec: PodSpec,
@@ -70,7 +70,7 @@ pub struct Node {
 #[async_trait::async_trait]
 pub trait Store: Send + Sync {
     async fn put_pod(&self, pod: Pod) -> anyhow::Result<()>;
-    async fn get_pod(&self, uid: &str) -> anyhow::Result<Option<Pod>>;
+    async fn get_pod(&self, name: &str) -> anyhow::Result<Option<Pod>>;
     async fn list_pods(&self) -> anyhow::Result<Vec<Pod>>;
     async fn put_node(&self, node: Node) -> anyhow::Result<()>;
     async fn list_nodes(&self) -> anyhow::Result<Vec<Node>>;

@@ -8,3 +8,5 @@ klite-core = { path = "../klite-core" }
 axum = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 uuid = { version = "1", features = ["v4"] }
+anyhow = "1.0"
+async-trait = "0.1"

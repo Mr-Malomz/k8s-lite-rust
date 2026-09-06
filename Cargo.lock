@@ -259,6 +259,8 @@ dependencies = [
 name = "klite-apiserver"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "axum",
  "klite-core",
  "tokio",
