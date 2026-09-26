@@ -26,7 +26,23 @@ async fn main() {
                     let container_name = format!("klite-{}", &pod.uid);
                     match docker::container_status(&docker, &container_name).await {
                         Ok(status) => {
-                            println!("Pod {} is in state {:?}", &pod.uid, status);
+                            match status {
+                                docker::ContainerState::Running => {
+                                    println!("Pod {} is already running", &pod.uid);
+                                }
+                                docker::ContainerState::Stopped => {
+                                    match docker::start_existing_container(&docker, &container_name).await{
+                                        Ok(_) => println!("Pod {} started successfully", &pod.uid),
+                                        Err(e) => eprintln!("Failed to start pod {}: {}", &pod.uid, e),
+                                    };
+                                }
+                                docker::ContainerState::Missing => {
+                                    match docker::create_and_start_container(&docker, &container_name, &pod.spec).await{
+                                        Ok(_) => println!("Pod {} created and started successfully", &pod.uid),
+                                        Err(e) => eprintln!("Failed to create and start pod {}: {}", &pod.uid, e),
+                                    };
+                                }
+                            }
                         }
                         Err(e) => eprintln!("Failed to get container status: {e}"),
                     }
