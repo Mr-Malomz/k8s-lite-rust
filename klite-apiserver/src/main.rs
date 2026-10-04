@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use axum::{Router, routing::get};
+use axum::{Router, routing::{get, patch}};
 use klite_core::Store;
 
-use crate::handlers::{apply, get_pod, list_pods};
+use crate::handlers::{apply, get_pod, list_pods, update_status};
 
 mod handlers;
 mod store;
@@ -15,6 +15,7 @@ async fn main() {
     let app = Router::new()
         .route("/pods/:name", get(get_pod).put(apply))
         .route("/pods", get(list_pods))
+        .route("/pods/:name/status", patch(update_status))
         .with_state(store);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")

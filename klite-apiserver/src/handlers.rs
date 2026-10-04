@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use klite_core::{Pod, PodSpec, Store};
+use klite_core::{Pod, PodSpec, PodStatus, Store};
 
 pub struct AppError {
     error: anyhow::Error,
@@ -82,6 +82,22 @@ pub async fn apply(
     store.put_pod(pod.clone()).await?;
     Ok(Json(pod))
 }
+
+pub async fn update_status(
+    State(store): State<Arc<dyn Store>>,
+    Path(name): Path<String>,
+    Json(status): Json<PodStatus>,
+) -> Result<Json<Pod>, AppError> {
+    let mut pod = store.get_pod(&name).await?.ok_or_else(|| AppError {
+        error: anyhow::anyhow!("Pod not found"),
+        status: StatusCode::NOT_FOUND,
+    })?;
+
+    pod.status = status;
+    store.put_pod(pod.clone()).await?;
+    Ok(Json(pod))
+}
+    
 
 pub async fn list_pods(State(store): State<Arc<dyn Store>>) -> Result<Json<Vec<Pod>>, AppError> {
     let pods = store.list_pods().await?;

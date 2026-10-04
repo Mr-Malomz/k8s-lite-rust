@@ -6,8 +6,8 @@ use klite_core::PodSpec;
 #[derive(Debug)]
 pub enum ContainerState {
     Missing,
-    Stopped,
-    Running,
+    Stopped(String),
+    Running(String),
 }
 
 pub async fn container_status(
@@ -20,10 +20,11 @@ pub async fn container_status(
                 .state
                 .and_then(|state| state.running)
                 .unwrap_or(false);
+            let id = response.id.clone().unwrap_or_default();
             Ok(if running {
-                ContainerState::Running
+                ContainerState::Running(id)
             } else {
-                ContainerState::Stopped
+                ContainerState::Stopped(id)
             })
         }
         Err(errors::Error::DockerResponseServerError {
@@ -37,7 +38,7 @@ pub async fn create_and_start_container(
     docker: &Docker,
     container_name: &str,
     spec: &PodSpec,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     let env_vars: Vec<String> = spec
         .env
         .iter()
@@ -51,7 +52,7 @@ pub async fn create_and_start_container(
         ..Default::default()
     };
 
-    docker
+    let response = docker
         .create_container(
             Some(CreateContainerOptions {
                 name: Some(container_name.to_string()),
@@ -63,7 +64,7 @@ pub async fn create_and_start_container(
     docker
         .start_container(container_name, None::<StartContainerOptions>)
         .await?;
-    Ok(())
+    Ok(response.id)
 }
 
 pub async fn start_existing_container(docker: &Docker, container_name: &str) -> anyhow::Result<()> {
