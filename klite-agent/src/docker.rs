@@ -1,12 +1,15 @@
 use bollard::{
-    Docker, errors, models::ContainerCreateBody, query_parameters::{CreateContainerOptions, StartContainerOptions},
+    Docker, errors,
+    models::ContainerCreateBody,
+    query_parameters::{CreateContainerOptions, CreateImageOptionsBuilder, StartContainerOptions},
 };
+use futures_util::TryStreamExt;
 use klite_core::PodSpec;
 
 #[derive(Debug)]
 pub enum ContainerState {
     Missing,
-    Stopped(String),
+    Stopped { id: String, exit_code: Option<i64> },
     Running(String),
 }
 
@@ -16,15 +19,17 @@ pub async fn container_status(
 ) -> anyhow::Result<ContainerState> {
     match docker.inspect_container(container_name, None).await {
         Ok(response) => {
-            let running = response
-                .state
+            let state = response.state;
+            let running = state
+                .as_ref()
                 .and_then(|state| state.running)
                 .unwrap_or(false);
+            let exit_code = state.as_ref().and_then(|state| state.exit_code);
             let id = response.id.clone().unwrap_or_default();
             Ok(if running {
                 ContainerState::Running(id)
             } else {
-                ContainerState::Stopped(id)
+                ContainerState::Stopped { id, exit_code }
             })
         }
         Err(errors::Error::DockerResponseServerError {
@@ -52,15 +57,32 @@ pub async fn create_and_start_container(
         ..Default::default()
     };
 
-    let response = docker
+    let response = match docker
         .create_container(
             Some(CreateContainerOptions {
                 name: Some(container_name.to_string()),
                 platform: String::new(),
             }),
-            config,
+            config.clone(),
         )
-        .await?;
+        .await {
+            Ok(response) => response,
+            Err(errors::Error::DockerResponseServerError {
+                status_code: 404,
+                ..
+            }) => {
+                pull_image(docker, &spec.image).await?;
+                docker.create_container(
+                    Some(CreateContainerOptions {
+                        name: Some(container_name.to_string()),
+                        platform: String::new(),
+                    }),
+                    config,
+                )
+                .await?
+            }
+            Err(e) => return Err(e.into()),
+        };
     docker
         .start_container(container_name, None::<StartContainerOptions>)
         .await?;
@@ -70,6 +92,19 @@ pub async fn create_and_start_container(
 pub async fn start_existing_container(docker: &Docker, container_name: &str) -> anyhow::Result<()> {
     docker
         .start_container(container_name, None::<StartContainerOptions>)
+        .await?;
+    Ok(())
+}
+
+pub async fn pull_image(docker: &Docker, image: &str) -> anyhow::Result<()> {
+    println!("pulling image {}", image);
+    docker
+        .create_image(
+            Some(CreateImageOptionsBuilder::default().from_image(image).build()),
+            None,
+            None,
+        )
+        .try_collect::<Vec<_>>()
         .await?;
     Ok(())
 }

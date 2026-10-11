@@ -43,26 +43,64 @@ async fn main() {
                             docker::ContainerState::Running(id) => {
                                 println!("Pod {} is already running", id);
                             }
-                            docker::ContainerState::Stopped(id) => {
-                                match docker::start_existing_container(&docker, &container_name)
-                                    .await
-                                {
-                                    Ok(_) => {
-                                        let status = PodStatus {
-                                            phase: klite_core::PodPhase::Running,
-                                            node_name: Some("local".into()),
-                                            container_id: Some(id),
-                                            restart_count: pod.status.restart_count + 1,
-                                            last_transition: std::time::SystemTime::now(),
-                                        };
-                                        match report_status(&client, &pod.spec.name, &status).await {
-                                            Ok(_) => {},
-                                            Err(e) => eprintln!("Failed to report pod status: {e}"),
-                                        }
-                                        println!("Pod {} started successfully", &pod.uid)
-                                    }
-                                    Err(e) => eprintln!("Failed to start pod {}: {}", &pod.uid, e),
+                            docker::ContainerState::Stopped { id, exit_code } => {
+                                let should_restart = match pod.spec.restart_policy {
+                                    klite_core::RestartPolicy::Always => true,
+                                    klite_core::RestartPolicy::Never => false,
+                                    klite_core::RestartPolicy::OnFailure => exit_code != Some(0),
                                 };
+
+                                if should_restart {
+                                    match docker::start_existing_container(&docker, &container_name)
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            let status = PodStatus {
+                                                phase: klite_core::PodPhase::Running,
+                                                node_name: Some("local".into()),
+                                                container_id: Some(id),
+                                                restart_count: pod.status.restart_count + 1,
+                                                last_transition: std::time::SystemTime::now(),
+                                            };
+                                            match report_status(&client, &pod.spec.name, &status)
+                                                .await
+                                            {
+                                                Ok(_) => {}
+                                                Err(e) => {
+                                                    eprintln!("Failed to report pod status: {e}")
+                                                }
+                                            }
+                                            println!("Pod {} started successfully", &pod.uid)
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Failed to start pod {}: {}", &pod.uid, e)
+                                        }
+                                    };
+                                } else {
+                                    let phase = if exit_code == Some(0) {
+                                        klite_core::PodPhase::Succeeded
+                                    } else {
+                                        klite_core::PodPhase::Failed
+                                    };
+                                    let status = PodStatus {
+                                        phase,
+                                        node_name: Some("local".into()),
+                                        container_id: Some(id),
+                                        restart_count: pod.status.restart_count,
+                                        last_transition: std::time::SystemTime::now(),
+                                    };
+
+                                    match report_status(&client, &pod.spec.name, &status).await {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("Failed to report pod status: {}", e),
+                                    }
+                                    println!(
+                                        "Pod {} not restarted (policy: {:?}, exit_code: {:?})",
+                                        &pod.uid,
+                                        pod.spec.restart_policy,
+                                        exit_code
+                                    );
+                                }
                             }
                             docker::ContainerState::Missing => {
                                 match docker::create_and_start_container(
@@ -80,8 +118,9 @@ async fn main() {
                                             restart_count: 0,
                                             last_transition: std::time::SystemTime::now(),
                                         };
-                                        match report_status(&client, &pod.spec.name, &status).await {
-                                            Ok(_) => {},
+                                        match report_status(&client, &pod.spec.name, &status).await
+                                        {
+                                            Ok(_) => {}
                                             Err(e) => eprintln!("Failed to report pod status: {e}"),
                                         }
                                         println!(
