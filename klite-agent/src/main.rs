@@ -3,6 +3,25 @@ use klite_core::PodStatus;
 
 mod docker;
 
+const NODE_NAME: &str = "local-1";
+
+async fn register_node(client: &reqwest::Client) -> anyhow::Result<()> {
+    let info = klite_core::NodeInfo {
+        name: NODE_NAME.to_string(),
+        address: "http://[IP_ADDRESS]".to_string(),
+        capacity: klite_core::ResourceRequest {
+            cpu_millis: 2000,
+            memory_mb: 4096,
+        },
+    };
+    client
+        .put(format!("http://127.0.0.1:3000/nodes/{}", NODE_NAME))
+        .json(&info)
+        .send()
+        .await?;
+    Ok(())
+}
+
 async fn fetch_pods(client: &reqwest::Client) -> anyhow::Result<Vec<klite_core::Pod>> {
     let pods = client
         .get("http://127.0.0.1:3000/pods")
@@ -32,7 +51,17 @@ async fn main() {
     let client = reqwest::Client::new();
     let docker = Docker::connect_with_local_defaults().expect("Failed to connect to Docker");
 
+    match register_node(&client).await {
+        Ok(_) => println!("Node {} registered", NODE_NAME),
+        Err(e) => eprintln!("Failed to register node: {e}"),
+    }
+
     loop {
+        match register_node(&client).await {
+            Ok(_) => {}
+            Err(e) => eprintln!("Failed to send heartbeat: {e}"),
+        }
+
         match fetch_pods(&client).await {
             Ok(pods) => {
                 println!("{:#?}", pods);

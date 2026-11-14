@@ -4,4 +4,5 @@ members = [
     "klite-core",
     "klite-apiserver",
     "klite-agent",
+    "klite-scheduler",
 ]

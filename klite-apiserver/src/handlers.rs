@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use klite_core::{Pod, PodSpec, PodStatus, Store};
+use klite_core::{Node, NodeInfo, Pod, PodSpec, PodStatus, Store};
 
 pub struct AppError {
     error: anyhow::Error,
@@ -97,9 +97,36 @@ pub async fn update_status(
     store.put_pod(pod.clone()).await?;
     Ok(Json(pod))
 }
-    
 
 pub async fn list_pods(State(store): State<Arc<dyn Store>>) -> Result<Json<Vec<Pod>>, AppError> {
     let pods = store.list_pods().await?;
     Ok(Json(pods))
+}
+
+pub async fn register_node(
+    State(store): State<Arc<dyn Store>>,
+    Path(name): Path<String>,
+    Json(info): Json<NodeInfo>,
+) -> Result<Json<Node>, AppError> {
+    if name != info.name {
+        return Err(AppError {
+            error: anyhow::anyhow!("name in path must match body name"),
+            status: StatusCode::BAD_REQUEST,
+        });
+    }
+
+    let node = Node {
+        name: info.name,
+        address: info.address,
+        capacity: info.capacity,
+        last_heartbeat: std::time::SystemTime::now(),
+    };
+
+    store.put_node(node.clone()).await?;
+    Ok(Json(node))
+}
+
+pub async fn list_nodes(State(store): State<Arc<dyn Store>>) -> Result<Json<Vec<Node>>, AppError> {
+    let nodes = store.list_nodes().await?;
+    Ok(Json(nodes))
 }

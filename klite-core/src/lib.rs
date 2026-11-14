@@ -65,6 +65,14 @@ pub struct Node {
     pub last_heartbeat: SystemTime,
 }
 
+// Node info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeInfo {
+    pub name: String,
+    pub address: String,
+    pub capacity: ResourceRequest,
+}
+
 // ---- The store trait — swap implementations later (HashMap -> sled -> raft) ----
 
 #[async_trait::async_trait]
